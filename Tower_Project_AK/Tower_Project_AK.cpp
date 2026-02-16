@@ -31,9 +31,9 @@ public:
 
     void reset() {
         key = 0;
-        def = 10;
-        str = 4;
-        HP = 14;
+        def = 7;
+        str = 8;
+        HP = 40;
     }
 
 };
