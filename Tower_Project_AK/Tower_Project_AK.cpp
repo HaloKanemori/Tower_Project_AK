@@ -46,6 +46,8 @@ private:
     string name;
     vector<int> teleR1, teleC1;
     vector<int> teleR2, teleC2;
+    int** gridreset;
+    int startRow, startCol;
 
 public:
     Player player;
@@ -70,17 +72,24 @@ public:
         name = n;
 
         grid = new int* [rows];
+        gridreset = new int* [rows];
         for (int i = 0; i < rows; i++) {
-           grid[i] = new int[cols];
-            for (int j = 0; j < cols; j++)
+            grid[i] = new int[cols];
+            gridreset[i] = new int[cols];
+            for (int j = 0; j < cols; j++){
                 grid[i][j] = EMPTY;
+            gridreset[i][j] = EMPTY;
+        }
         }
     }
     //empty grid 0
     ~Dungeon() {
-        for (int i = 0; i < rows; i++)
+        for (int i = 0; i < rows; i++){
             delete[] grid[i];
+        delete[] gridreset[i];
+    }
         delete[] grid;
+        delete[] gridreset;
     }
     string getName() {
         return name; 
@@ -89,13 +98,26 @@ public:
     void setName(const string& n) {// for dougeon editor
         name = n;
     }
+    void resetDungeon() {
+        for (int i = 0; i < rows; i++)
+            for (int j = 0; j < cols; j++)
+                grid[i][j] = gridreset[i][j];
+
+        player.reset();
+        player.row = startRow;
+        player.col = startCol;
+    }
     void placePlayer(int r, int c) {
         player.row = r;
         player.col = c;
+        startRow = r;
+        startCol = c;
+
     }
 
     void setTile(int r, int c, int type) {
         grid[r][c] = type;
+        gridreset[r][c] = type;
     }
 
     void display() {
@@ -334,40 +356,50 @@ public:
 
 
 void playDungeon(Dungeon* d) {
-    d->player.reset();
+    d->resetDungeon();
     bool run = true;
 
-    while (run) {
-        d->display();
-        cout << endl << "Move (W/A/S/D): ";
+   while (run) {
+    d->display();
+    cout << endl << "Move (up/down/left/right or U/D/L/R): ";
 
-        char move;
-        bool loop;
+    string move;
+    char move_result = '?';
+    bool loop;
 
-        do {
-            cin >> move;
+    do {
+        cin >> move;
 
-            if (cin.fail()) {
-                cin.clear();
-                cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                loop = false;
-                cout << "\nInvalid character! Please enter W, A, S, or D\n";
+        if (cin.fail()) {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            loop = false;
+            cout << "\nInvalid input! Please enter up/down/left/right or U/D/L/R\n";
+        }
+        else {
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+
+            for (int idx = 0; idx < move.size(); idx++) {
+                move[idx] = toupper(move[idx]);
             }
+            if (move == "LEFT" || move == "L") move_result = 'A';
+            else if (move == "RIGHT" || move == "R") move_result = 'D';
+            else if (move == "UP" || move == "U") move_result = 'W';
+            else if (move == "DOWN" || move == "D") move_result = 'S';
+            else move_result = '?';
+
+            if (move_result != '?')
+                loop = true;
             else {
-                cin.ignore(numeric_limits<streamsize>::max(), '\n'); // <-- FIX
-                move = toupper(move);
-
-                if (move == 'W' || move == 'A' || move == 'S' || move == 'D')
-                    loop = true;
-                else {
-                    cout << "\nInvalid direction! Use W, A, S, or D\n";
-                    loop = false;
-                }
+                cout << "\nInvalid direction. Use up/down/left/right or U/D/L/R\n";
+                loop = false;
             }
+        }
 
-        } while (!loop);
+    } while (!loop);
 
-        run = d->movePlayer(move);
+    run = d->movePlayer(move_result);
+
 
         if (d->player.HP <= 0)
             run = false;
@@ -419,7 +451,7 @@ Dungeon* createCustomDungeon() {
     do {
         cin >> r;
 
-        if (cin.fail()) {
+        if (cin.fail() || r > 1) {
             cin.clear();
             cin.ignore(numeric_limits<streamsize>::max(), '\n');
             loop = false;
@@ -433,7 +465,7 @@ Dungeon* createCustomDungeon() {
     do {
         cin >> c;
 
-        if (cin.fail()) {
+        if (cin.fail()|| c>1) {
             cin.clear();
             cin.ignore(numeric_limits<streamsize>::max(), '\n');
             loop = false;
@@ -497,7 +529,7 @@ Dungeon* createCustomDungeon() {
         cin >> choice;
 
         if (choice == 1) {
-            cout << "\n1) Wall\n2) Goal\n3) Key\n4) Door\n5) Enemy\n6) Health\n7) Strength\n8) Defense\n9) Teleporter";
+            cout << "\n1) Wall\n2) Goal\n3) Key\n4) Door\n5) Enemy\n6) Health\n7) Strength\n8) Defense\n9) Teleporter\n";
             cout << "Select object: ";
 
             int obj;
@@ -621,18 +653,3 @@ int main()
    }
 }
 
-/*do {
-		cin >> player_char;
-		
-		if (cin.fail() || player_char=='*' || player_char == '-') {
-			cin.clear();
-			cin.ignore(numeric_limits<streamsize>::max(), '\n');
-			choice = false;
-			cout << "\nInvalid character! Please enter an avalable character" << endl;
-		}
-		else {
-			choice = true;
-		}
-	} while (!choice);
-	
-*/
