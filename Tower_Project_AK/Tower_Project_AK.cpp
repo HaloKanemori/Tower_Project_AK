@@ -977,7 +977,7 @@ Dungeon* selectDungeon(vector<Dungeon*>& dungeons) {
                 return findDungeon(loaded->name);
             }
         }
-    
+    }
 
     for (auto d : dungeons) {
         if (d->name == input)
@@ -986,7 +986,7 @@ Dungeon* selectDungeon(vector<Dungeon*>& dungeons) {
 
     cout << "Invalid selection.\n";
     return nullptr;
-}}
+}
 
 
 int main() {
