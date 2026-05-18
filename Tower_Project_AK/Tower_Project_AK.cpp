@@ -3,6 +3,8 @@
 #include <string>
 #include <limits>
 #include <memory> 
+#include <fstream>
+#include <sstream>
 
 using namespace std;
 string controlMode = "WASD";
@@ -100,6 +102,8 @@ public:
     virtual bool walkable() { return true; }
     virtual void onEnter(Player&, bool& running, bool& consumed) {}
 
+    virtual void save(ofstream& fout, int r, int c) {}//SAVE
+
     virtual ~Tile() {}
 };
 
@@ -110,6 +114,9 @@ public:
     void inspect() {}
     unique_ptr<Tile> clone() const {
         return make_unique<EmptyTile>(*this);
+    }
+
+    void save(ofstream&, int, int) {//is needed
     }
 };
 
@@ -123,7 +130,12 @@ public:
     }
     void inspect() {}
     bool walkable() { return false; }
-
+    
+    void save(ofstream& fout, int r, int c) {
+        fout << "WALL "
+            << r << " "
+            << c << "\n";
+    }
 };
 
 class GoalTile : public Tile {
@@ -138,6 +150,12 @@ public:
     void onEnter(Player&, bool& running, bool&) {
         cout << "YOU WIN!\n";
         running = false;
+    }
+
+    void save(ofstream& fout, int r, int c) {
+        fout << "GOAL "
+            << r << " "
+            << c << "\n";
     }
 };
 
@@ -182,6 +200,15 @@ public:
         cout << "Enemy defeated!\n";
         consumed = true;
     }
+
+    void save(ofstream& fout, int r, int c) {
+        fout << "ENEMY "
+            << r << " "
+            << c << " "
+            << hp << " "
+            << atk << " "
+            << def << "\n";
+    }
 };
 
 class PotionTile : public Tile {
@@ -213,6 +240,14 @@ public:
         consumed = true;
     }
 
+    void save(ofstream& fout, int r, int c) {
+        fout << "POTION "
+            << r << " "
+            << c << " "
+            << hpB << " "
+            << strB << " "
+            << defB << "\n";
+    }
 };
 
 class KeyTile : public Tile {
@@ -232,6 +267,13 @@ public:
     void onEnter(Player& p, bool&, bool& consumed) {
         p.keys.push_back(color);
         consumed = true;
+    }
+
+    void save(ofstream& fout, int r, int c) {
+        fout << "KEY "
+            << r << " "
+            << c << " "
+            << color << "\n";
     }
 };
 
@@ -266,6 +308,13 @@ public:
         }
         cout << "Locked!\n";
     }
+
+    void save(ofstream& fout, int r, int c) {
+        fout << "DOOR "
+            << r << " "
+            << c << " "
+            << color << "\n";
+    }
 };
 
 class DamageTile : public Tile {
@@ -294,6 +343,13 @@ public:
     void onEnter(Player& p, bool&, bool&) {
         cout << "Took " << dmg << " damage!\n";
         p.HP -= dmg;
+    }
+
+    void save(ofstream& fout, int r, int c) {
+        fout << "DAMAGE "
+            << r << " "
+            << c << " "
+            << type << "\n";
     }
 };
 
@@ -482,7 +538,150 @@ public:
 
         cout << "Game Over\n";
     }
-};
+
+    void saveToFile(string filename) {
+
+        if (filename.find(".dun") == string::npos)
+            filename += ".dun";
+
+        ofstream fout(filename);
+
+        if (!fout) {
+            cout << "Could not save file.\n";
+            return;
+        }
+
+        fout << rows << " " << cols << "\n";
+        fout << startRow << " " << startCol << "\n";
+
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                original[i][j]->save(fout, i, j);
+            }
+        }
+
+        cout << "Dungeon saved to " << filename << "\n";
+    }
+
+    static Dungeon* loadFromFile(string filename) {
+
+        if (filename.find(".dun") == string::npos)
+            filename += ".dun";
+
+        ifstream fin(filename);
+
+        if (!fin) {
+            cout << "File not found.\n";
+            return nullptr;
+        }
+
+        int rows, cols;
+
+        if (!(fin >> rows >> cols)) {
+            cout << "Invalid dungeon format.\n";
+            return nullptr;
+        }
+
+        string dummy;
+        getline(fin, dummy);
+
+        int sr, sc;
+
+        if (!(fin >> sr >> sc)) {
+            cout << "Invalid dungeon format.\n";
+            return nullptr;
+        }
+
+        getline(fin, dummy);
+
+        Dungeon* d = new Dungeon(rows, cols, filename);
+
+        d->startRow = sr;
+        d->startCol = sc;
+
+        d->player.row = sr;
+        d->player.col = sc;
+
+        string line;
+
+        while (getline(fin, line)) {
+
+            if (line.empty()) continue;
+
+            stringstream ss(line);
+
+            string type;
+            int r, c;
+
+            ss >> type >> r >> c;
+
+            if (type == "WALL") {
+                d->setTile(r, c, make_unique<WallTile>());
+            }
+
+            else if (type == "GOAL") {
+                d->setTile(r, c, make_unique<GoalTile>());
+            }
+
+            else if (type == "ENEMY") {
+
+                int hp, atk, def;
+
+                ss >> hp >> atk >> def;
+
+                d->setTile(r, c,
+                    make_unique<EnemyTile>(hp, atk, def));
+            }
+
+            else if (type == "POTION") {
+
+                int hp, str, def;
+
+                ss >> hp >> str >> def;
+
+                d->setTile(r, c,
+                    make_unique<PotionTile>(hp, str, def));
+            }
+
+            else if (type == "KEY") {
+
+                string color;
+                ss >> color;
+
+                d->setTile(r, c,
+                    make_unique<KeyTile>(color));
+            }
+
+            else if (type == "DOOR") {
+
+                string color;
+                ss >> color;
+
+                d->setTile(r, c,
+                    make_unique<DoorTile>(color));
+            }
+
+            else if (type == "DAMAGE") {
+
+                string damageType;
+                ss >> damageType;
+
+                d->setTile(r, c,
+                    make_unique<DamageTile>(damageType));
+            }
+
+            else {
+                cout << "Invalid dungeon data.\n";
+                delete d;
+                return nullptr;
+            }
+        }
+
+        cout << "Dungeon loaded successfully.\n";
+
+        return d;
+    }
+};//end of dungeon func
 vector<Dungeon*> dungeons;
 
 Dungeon* findDungeon(string name) {
@@ -505,51 +704,69 @@ void showPlaceMenu() {
 }
 
 void editor() {
-    cout << "Dungeon name: ";
+    cout << "Dungeon name (or type LOAD): ";
     string name;
     cin >> name;
 
-    Dungeon* d = findDungeon(name);
+    Dungeon* d = nullptr;
+    string n = normalize(name);
 
-    if (!d) {
-        cout << "Rows: ";
-        int r = safeIntIndef(1);
+    if (n == "LOAD" || n == "L") {
+        cout << "Filename: ";
+        string filename;
+        cin >> filename;
 
-        cout << "Cols: ";
-        int c = safeIntIndef(1);
+        d = Dungeon::loadFromFile(filename);
 
-        d = new Dungeon(r, c, name);
+        if (!d) {
+            cout << "Load failed.\n";
+            return;
+        }
+
         dungeons.push_back(d);
     }
     else {
-        cout << "Dungeon exists. Overwriting...\n";
+        d = findDungeon(name);
 
-        cout << "Rows: ";
-        int r = safeIntIndef(1);
+        if (!d) {
+            cout << "Rows: ";
+            int r = safeIntIndef(1);
 
-        cout << "Cols: ";
-        int c = safeIntIndef(1);
+            cout << "Cols: ";
+            int c = safeIntIndef(1);
 
-        for (int i = 0; i < dungeons.size(); i++) {
-            if (dungeons[i]->name == name) {
-                delete dungeons[i];
-                dungeons[i] = new Dungeon(r, c, name);
-                d = dungeons[i];
-                break;
+            d = new Dungeon(r, c, name);
+            dungeons.push_back(d);
+        }
+        else {
+            cout << "Dungeon exists. Overwriting...\n";
+
+            cout << "Rows: ";
+            int r = safeIntIndef(1);
+
+            cout << "Cols: ";
+            int c = safeIntIndef(1);
+
+            for (auto& x : dungeons) {
+                if (x->name == name) {
+                    delete x;
+                    x = new Dungeon(r, c, name);
+                    d = x;
+                    break;
+                }
             }
         }
+        cout << "Start Row: ";
+        int sr = safeIntRange(0, d->rows - 1);
+
+        cout << "Start Col: ";
+        int sc = safeIntRange(0, d->cols - 1);
+
+        d->startRow = sr;
+        d->startCol = sc;
+        d->player.row = sr;
+        d->player.col = sc;
     }
-
-    cout << "Start Row: ";
-    int sr = safeIntRange(0, d->rows - 1);
-
-    cout << "Start Col: ";
-    int sc = safeIntRange(0, d->cols - 1);
-
-    d->startRow = sr;
-    d->startCol = sc;
-    d->player.row = sr;
-    d->player.col = sc;
 
     while (true) {
         d->display_edit();
@@ -558,7 +775,8 @@ void editor() {
         cout << "1) Place\n";
         cout << "2) Inspect\n";
         cout << "3) Playtest\n";
-        cout << "4) Exit\n";
+        cout << "4) Save To File\n";
+        cout << "5) Exit\n";
         cout << "Choice: ";
 
         string choice;
@@ -654,7 +872,17 @@ void editor() {
             d->resetDungeon();
         }
 
-        else if (choice == "4" || choice == "EXIT" || choice == "QUIT") {
+        else if (choice == "4" || choice == "SAVE") {
+
+            cout << "Filename: ";
+
+            string filename;
+            cin >> filename;
+
+            d->saveToFile(filename);
+        }
+
+        else if (choice == "5" || choice == "EXIT" || choice == "QUIT") {
             break;
         }
 
@@ -694,7 +922,9 @@ Dungeon* selectDungeon(vector<Dungeon*>& dungeons) {
         cout << i + 1 << ") " << dungeons[i]->name << "\n";
     }
 
+    cout << "L) Load dungeon from file\n";
     cout << "Enter number or name: ";
+
 
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
@@ -702,6 +932,24 @@ Dungeon* selectDungeon(vector<Dungeon*>& dungeons) {
     getline(cin, input);
 
     string normInput = normalize(input);
+
+    if (normInput == "L") {
+        while (true) {
+            cout << "Filename: ";
+            string filename;
+            cin >> filename;
+
+            Dungeon* loaded = Dungeon::loadFromFile(filename);
+
+            if (loaded == nullptr) {
+                cout << "Try again.\n";
+                continue;
+            }
+
+            dungeons.push_back(loaded);
+            return loaded;
+        }
+    }
 
     bool isNumber = true;
     if (input.empty()) {
@@ -717,9 +965,31 @@ Dungeon* selectDungeon(vector<Dungeon*>& dungeons) {
     }
 
     if (isNumber) {
+
         int idx = stoi(input) - 1;
+
         if (idx >= 0 && idx < dungeons.size())
             return dungeons[idx];
+
+        if (idx == dungeons.size()) {
+
+            while (true) {
+
+                cout << "Filename: ";
+                string filename;
+                cin >> filename;
+
+                Dungeon* loaded = Dungeon::loadFromFile(filename);
+
+                if (loaded == nullptr) {
+                    cout << "Try again.\n";
+                    continue;
+                }
+
+                dungeons.push_back(loaded);
+                return loaded;
+            }
+        }
     }
 
     for (auto d : dungeons) {

@@ -1,0 +1,8 @@
+10 10
+0 0
+WALL 1 0
+WALL 2 0
+KEY 0 1 red
+DOOR 0 6 red
+ENEMY 5 1 20 6 3
+GOAL 9 2
